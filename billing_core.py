@@ -20,6 +20,7 @@ EXCEL_PATH = os.path.join(APP_DIR, "transactions.xlsx")
 INVOICE_COUNTER_PATH = os.path.join(APP_DIR, "invoice_counter.txt")
 BUSINESS_INFO_PATH = os.path.join(ASSETS_DIR, "business_info.json")
 KEYBINDINGS_PATH = os.path.join(APP_DIR, "keybindings.json")
+PREVIEW_PATH = os.path.join(APP_DIR, "preview.pdf")
 
 DEFAULT_KEYBINDINGS = {
     "add_item": "<Control-Return>",
@@ -94,7 +95,7 @@ def save_keybindings(bindings):
 
 # ---------- Invoice numbering ----------
 
-def get_next_invoice_number():
+def peek_next_invoice_number():
     current = 0
     if os.path.exists(INVOICE_COUNTER_PATH):
         try:
@@ -102,7 +103,11 @@ def get_next_invoice_number():
                 current = int(f.read().strip() or 0)
         except (ValueError, OSError):
             current = 0
-    next_number = current + 1
+    return current + 1
+
+
+def get_next_invoice_number():
+    next_number = peek_next_invoice_number()
     with open(INVOICE_COUNTER_PATH, "w") as f:
         f.write(str(next_number))
     return next_number
@@ -396,3 +401,10 @@ def generate_bill(items, discount_raw, tax_rate, delivery_charge, payment_method
     log_transaction(items, totals, payment_method, filename, invoice_number)
 
     return output_path, totals, invoice_number
+
+
+def build_preview(items, discount_raw, tax_rate, delivery_charge, payment_method):
+    totals = compute_totals(items, discount_raw, tax_rate, delivery_charge)
+    invoice_number = peek_next_invoice_number()
+    build_pdf(items, totals, payment_method, invoice_number, PREVIEW_PATH)
+    return PREVIEW_PATH, totals

@@ -1,7 +1,9 @@
+import io
 import os
 from tkinter import messagebox, ttk
 
 import customtkinter as ctk
+import fitz
 from PIL import Image
 
 import billing_core as core
@@ -270,11 +272,22 @@ class BillingApp(ctk.CTk):
         )
         self.grand_total_label.grid(row=3, column=0, columnspan=4, sticky="e", padx=15, pady=(5, 10))
 
+        action_row = ctk.CTkFrame(bottom, fg_color="transparent")
+        action_row.grid(row=4, column=0, columnspan=4, sticky="ew", padx=15, pady=(0, 15))
+        action_row.grid_columnconfigure(0, weight=1)
+        action_row.grid_columnconfigure(1, weight=3)
+
+        self.preview_button = ctk.CTkButton(
+            action_row, text="Preview", height=44, font=ctk.CTkFont(size=13),
+            fg_color="gray40", hover_color="gray30", command=self._on_preview
+        )
+        self.preview_button.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+
         self.generate_button = ctk.CTkButton(
-            bottom, text="Generate Bill", height=44, font=ctk.CTkFont(size=15, weight="bold"),
+            action_row, text="Generate Bill", height=44, font=ctk.CTkFont(size=15, weight="bold"),
             fg_color=GOLD, hover_color=GOLD_HOVER, text_color="black", command=self._on_generate
         )
-        self.generate_button.grid(row=4, column=0, columnspan=4, sticky="ew", padx=15, pady=(0, 15))
+        self.generate_button.grid(row=0, column=1, sticky="ew")
 
     # ---------- Sales Summary tab ----------
 
@@ -682,6 +695,55 @@ class BillingApp(ctk.CTk):
             self.tax_label.configure(text="")
 
         self.grand_total_label.configure(text=f"Grand Total: {totals['grand_total']:.2f}")
+
+    def _on_preview(self):
+        if not self.items:
+            messagebox.showwarning("No Items", "Add at least one item to preview.")
+            return
+
+        try:
+            preview_path, _totals = core.build_preview(
+                self.items,
+                self._get_discount_raw(),
+                self._get_tax_rate(),
+                self._get_delivery_charge(),
+                self.payment_var.get(),
+            )
+        except ValueError as e:
+            messagebox.showerror("Invalid Input", str(e))
+            return
+
+        self._show_pdf_preview(preview_path)
+
+    def _show_pdf_preview(self, pdf_path):
+        doc = fitz.open(pdf_path)
+        page = doc[0]
+        pix = page.get_pixmap(dpi=200)
+        img_bytes = pix.tobytes("png")
+        doc.close()
+        img = Image.open(io.BytesIO(img_bytes))
+
+        display_width = 380
+        ratio = display_width / img.width
+        display_height = int(img.height * ratio)
+
+        window = ctk.CTkToplevel(self)
+        window.title("Bill Preview")
+        window.geometry(f"{display_width + 60}x{min(display_height + 100, 800)}")
+        window.transient(self)
+        window.grab_set()
+
+        scroll = ctk.CTkScrollableFrame(window, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=10, pady=10)
+
+        preview_img = ctk.CTkImage(light_image=img, dark_image=img, size=(display_width, display_height))
+        img_label = ctk.CTkLabel(scroll, image=preview_img, text="")
+        img_label.image = preview_img
+        img_label.pack()
+
+        ctk.CTkButton(
+            window, text="Close", width=100, fg_color="gray40", hover_color="gray30", command=window.destroy
+        ).pack(pady=(0, 10))
 
     def _on_generate(self):
         if not self.items:
