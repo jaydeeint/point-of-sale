@@ -583,6 +583,7 @@ class BillingApp(ctk.CTk):
         self.price_entry.delete(0, "end")
         self.qty_entry.delete(0, "end")
         self.form_status.configure(text="")
+        self.name_entry.focus_set()
 
     def _set_form_error(self, message):
         self.form_status.configure(text=message)
